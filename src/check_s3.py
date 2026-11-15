@@ -1,20 +1,8 @@
-"""
-Session 2: local S3 public access check.
+"""S3 public access checks (4 layers). Read-only."""
 
-Read-only: this script only calls Get* and List* APIs.
-It never changes anything in the AWS account.
-"""
-
-import json
-import os
-from datetime import datetime, timezone
-from pathlib import Path
-
-import boto3
 from botocore.exceptions import ClientError
 
-PROFILE = os.environ.get("AWS_PROFILE", "csc-dev")
-HOME_REGION = "ap-southeast-2"
+from common import HOME_REGION, error_code, make_finding
 
 PUBLIC_GRANTEES = {
     "http://acs.amazonaws.com/groups/global/AllUsers",
@@ -26,23 +14,6 @@ BPA_KEYS = [
     "BlockPublicPolicy",
     "RestrictPublicBuckets",
 ]
-
-
-def make_finding(check_id, resource, region, severity, status, message):
-    """Build one finding in the standard format used by the whole project."""
-    return {
-        "check_id": check_id,
-        "resource": resource,
-        "region": region,
-        "severity": severity,
-        "status": status,  # FAIL = problem found, ERROR = could not check
-        "message": message,
-        "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-    }
-
-
-def error_code(err):
-    return err.response.get("Error", {}).get("Code", "Unknown")
 
 
 def check_bpa_config(config):
@@ -134,27 +105,11 @@ def list_buckets(session):
     return buckets
 
 
-def main():
-    session = boto3.Session(profile_name=PROFILE, region_name=HOME_REGION)
-    account_id = session.client("sts").get_caller_identity()["Account"]
-
+def run_s3_checks(session, account_id):
+    """Run all S3 checks and return the findings."""
     findings = check_account_bpa(session, account_id)
     buckets = list_buckets(session)
     for name, region in buckets:
         findings.extend(check_bucket(session, name, region))
-
-    print(f"Checked: account-level BPA and {len(buckets)} bucket(s)")
-    print(f"Findings: {len(findings)}")
-    for f in findings:
-        print(f"  [{f['severity']}] {f['status']} {f['check_id']} "
-              f"{f['resource']} ({f['region']}): {f['message']}")
-
-    output_dir = Path("output")
-    output_dir.mkdir(exist_ok=True)
-    output_file = output_dir / "s3.findings.json"
-    output_file.write_text(json.dumps(findings, indent=2), encoding="utf-8")
-    print(f"Saved to {output_file}")
-
-
-if __name__ == "__main__":
-    main()
+    print(f"  S3: account-level BPA and {len(buckets)} bucket(s) checked")
+    return findings

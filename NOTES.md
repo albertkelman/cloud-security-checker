@@ -30,3 +30,13 @@
 - First real finding: account-level Block Public Access was not configured (MEDIUM)
 - Confirmed in the S3 console (all settings off), enabled "Block all public access"
 - Re-ran the scanner: 0 findings
+
+## Session 3 - Root, IAM, and security group checks
+- Refactored into common.py, check_s3.py, check_iam.py, scan.py
+- Added checks: ROOT_ACCESS_KEYS, ROOT_MFA, IAM_USER_NO_MFA, IAM_ACCESS_KEY_OLD
+  (IAM users come from the IAM credential report)
+- Finding: ROOT_MFA (HIGH). Investigated: IAM > Root access management shows only
+  "privileged actions" (centralized root access via AWS Organizations).
+  The root user has no long-term credentials.
+- Conclusion: false positive. Added SUPPRESSIONS with a written reason instead of
+  deleting the check. Suppressed findings are still reported, not counted as FAIL.
