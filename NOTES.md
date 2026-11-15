@@ -114,7 +114,7 @@
 - Full cycle test with a test security group (SSH open to 0.0.0.0/0, no instances):
   scan 1: 1 NEW, scan 2: still open (no NEW), deleted the group, scan 3: 1 resolved.
   DynamoDB row: is_open false, first_seen and resolved_at recorded.
-  - Created CloudWatch alarm cloud-security-checker-errors: AWS/Lambda Errors,
+- Created CloudWatch alarm cloud-security-checker-errors: AWS/Lambda Errors,
   Sum over 5 minutes >= 1, missing data = not breaching. ALARM and OK actions
   send to scanner-alerts.
 - Tested by pointing FINDINGS_TABLE to a non-existent table. DynamoDB returned
@@ -124,7 +124,7 @@
 - Restored FINDINGS_TABLE=scanner-findings and confirmed a clean run.
 - A missing daily email is the signal that the scanner did not run at all
   (an Invocations alarm is a possible improvement).
-  - Bug found during the alarm test: the report sent when the history failed still had
+- Bug found during the alarm test: the report sent when the history failed still had
   the subject "OK: 0 FAIL, 0 ERROR". Fixed build_subject to say
   "ACTION NEEDED ..., HISTORY ERROR" when the history update fails.
 
@@ -166,4 +166,21 @@
   (invoke-scanner-lambda), then detached and deleted the old policy.
 - Tested a one-time schedule with the new policy: report email arrived.
 
-
+## Session 9 - Comparison with AWS native services
+- Security Hub: blocked by an organization SCP (explicit deny on securityhub:DescribeHub)
+- AWS Config: available. Enabled in ap-southeast-2 at about 22:33 WIB, recording only
+  AWS::S3::Bucket, AWS::EC2::SecurityGroup, AWS::CloudTrail::Trail, AWS::IAM::User
+  (continuous), delivery bucket csc-config-kelman2611, no SNS.
+- Added 10 managed rules in the console. access-keys-rotated was not shown in the
+  console rule list, although the docs say it is available in Sydney. Created it with
+  the CLI (identifier ACCESS_KEYS_ROTATED, maxAccessKeyAge 90, because the CLI does not
+  fill in default parameters): ACTIVE.
+- Clean account: AWS Config and the scanner agreed on every check. Root MFA:
+  scanner FAIL (suppressed), Config INSUFFICIENT_DATA.
+- Detection speed: security group with SSH open created at 22:37:40, Config reported
+  NON_COMPLIANT within about 1 to 3 minutes. The scanner runs daily.
+- restricted-common-ports did not flag port 22 (SSH is covered by restricted-ssh)
+- Cleanup: deleted the test security group, stopped and deleted the recorder, deleted
+  the 11 rules (deletion is asynchronous), the delivery channel, and the config bucket.
+  The recorder ran from about 22:33 to 22:41 WIB.
+- Full comparison in docs/aws-config-comparison.md
