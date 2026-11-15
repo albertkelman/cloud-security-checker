@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Secrets and AWS credentials
+.env
+*.pem
+credentials
+.aws/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+
+# Scanner output (contains findings about my account)
+output/
+*.findings.json
+
+# OS and editor
+Thumbs.db
+.DS_Store
+.vscode/
