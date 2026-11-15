@@ -7,8 +7,8 @@
   Builder ID MFA protects sign-in
 - No IAM users or access keys
 - Budget: monthly-cost-budget, US$10
-- Project is locked to ap-southeast-2 (Sydney); settings.aws.com does not show the
-  project yet. Will retry switching to ap-southeast-1 before Session 4.
+- Region: ap-southeast-2 (Sydney). The project is restricted to this region by an
+  organization SCP, so the whole project stays in Sydney.
 
 ## Session 1 - Local tools and repo
 - Installed Python 3.13 and AWS CLI v2.40 with winget
@@ -23,20 +23,35 @@
   Out-File -Encoding utf8
 
 ## Session 2 - S3 public access check
-- Wrote src/scan_s3.py: checks 4 layers (account BPA, bucket BPA, bucket policy
-  status, bucket ACL). Status FAIL = problem found, ERROR = could not check.
+- Wrote the S3 check: 4 layers (account BPA, bucket BPA, bucket policy status,
+  bucket ACL). Status FAIL = problem found, ERROR = could not check.
 - Error: MissingDependencyException when boto3 reads `aws login` credentials
 - Fix: pip install "botocore[crt]"
 - First real finding: account-level Block Public Access was not configured (MEDIUM)
 - Confirmed in the S3 console (all settings off), enabled "Block all public access"
 - Re-ran the scanner: 0 findings
 
-## Session 3 - Root, IAM, and security group checks
-- Refactored into common.py, check_s3.py, check_iam.py, scan.py
-- Added checks: ROOT_ACCESS_KEYS, ROOT_MFA, IAM_USER_NO_MFA, IAM_ACCESS_KEY_OLD
+## Session 3 - Root, IAM, security group, and CloudTrail checks
+- Refactored into common.py, check_s3.py, check_iam.py, check_ec2.py,
+  check_cloudtrail.py, and scan.py
+- IAM checks: ROOT_ACCESS_KEYS, ROOT_MFA, IAM_USER_NO_MFA, IAM_ACCESS_KEY_OLD
   (IAM users come from the IAM credential report)
 - Finding: ROOT_MFA (HIGH). Investigated: IAM > Root access management shows only
   "privileged actions" (centralized root access via AWS Organizations).
   The root user has no long-term credentials.
-- Conclusion: false positive. Added SUPPRESSIONS with a written reason instead of
-  deleting the check. Suppressed findings are still reported, not counted as FAIL.
+  Conclusion: false positive. Added SUPPRESSIONS with a written reason instead of
+  deleting the check. Suppressed findings are still reported.
+- Security group check: sensitive ports (SSH, RDP, databases, Redis, MongoDB, or all
+  traffic) open to 0.0.0.0/0 or ::/0, across all enabled regions
+- 16 of 17 regions denied. Verified with the AWS CLI: "explicit deny in a service
+  control policy". Suppressed SG_REGION_ACCESS with a written reason.
+  Limitation: the suppression key does not include the region list.
+- Bug: apply_suppressions only handled FAIL, so the ERROR finding stayed visible.
+  Fixed to allow FAIL and ERROR, and kept the original status in "original_status".
+- Finding: CLOUDTRAIL_NOT_ENABLED (MEDIUM). Fixed by creating
+  management-events-trail (multi-region, management events only, no KMS,
+  no CloudWatch Logs, no Insights).
+- The new CloudTrail log bucket passed all 4 S3 checks.
+- Added CLOUDTRAIL_LOG_VALIDATION_OFF check. It detected that quick create left log
+  file validation disabled (LOW). Enabled it and re-ran: 0 FAIL, 0 ERROR,
+  2 SUPPRESSED.
