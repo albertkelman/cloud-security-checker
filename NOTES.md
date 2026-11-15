@@ -73,3 +73,26 @@
 - First run in Lambda: 0 FAIL, 0 ERROR, 2 SUPPRESSED. No AccessDenied errors,
   so the custom policy covers every API call.
   Duration ~21 s, max memory 124 MB.
+
+  ## Session 5 - Email reports and daily schedule
+- Created SNS topic scanner-alerts and confirmed an email subscription
+- Added sns:Publish to the policy, limited to the scanner-alerts topic ARN
+  (new policy version set as default)
+- Added notify.py: plain-text report grouped by FAIL, ERROR, and SUPPRESSED.
+  Subject says OK or ACTION NEEDED. The topic ARN comes from the ALERT_TOPIC_ARN
+  environment variable, so the code does not contain the account ID.
+- The report is sent after every scan, even with 0 findings, so a missing email
+  means the scanner is broken
+- If publishing fails, the Lambda run fails instead of hiding the error
+- Deployed with the AWS CLI (update-function-code, update-function-configuration)
+  and invoked: StatusCode 200, report received by email
+- Created EventBridge Scheduler schedule cloud-security-checker-daily:
+  cron(0 7 * * ? *) in Asia/Jakarta (07:00 WIB), flexible window off,
+  retry 2 times within 1 hour, no DLQ
+- Execution role cloud-security-checker-scheduler-role (created by the console, renamed):
+  only lambda:InvokeFunction on the cloud-security-checker function.
+  Trust policy allows only scheduler.amazonaws.com with aws:SourceAccount
+  (protection against the confused deputy problem).
+- The Lambda resource-based policy stays empty: Scheduler invokes through its role.
+- Tested with a one-time schedule (cloud-security-checker-test) set to delete itself
+  after running. Report email arrived at the scheduled time without a manual invoke.
