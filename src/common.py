@@ -7,14 +7,21 @@ PROFILE = os.environ.get("AWS_PROFILE", "csc-dev")
 HOME_REGION = "ap-southeast-2"
 
 # Findings reviewed by a human and accepted, with a written reason.
-# Key: (check_id, resource). They are still reported, but not counted as FAIL.
+# Key: (check_id, resource). They are still reported, but not counted as FAIL or ERROR.
 SUPPRESSIONS = {
     ("ROOT_MFA", "root"): (
         "Root access is centrally managed through AWS Organizations; "
         "the root user has no long-term credentials "
         "(verified in IAM > Root access management)."
     ),
+    ("SG_REGION_ACCESS", "regions"): (
+        "This project is restricted to ap-southeast-2. AWS returned "
+        "'explicit deny in a service control policy' for other regions, "
+        "so resources cannot be created there either."
+    ),
 }
+
+SUPPRESSIBLE_STATUSES = {"FAIL", "ERROR"}
 
 
 def make_finding(check_id, resource, region, severity, status, message):
@@ -38,10 +45,11 @@ def error_code(err):
 
 
 def apply_suppressions(findings):
-    """Mark reviewed findings as SUPPRESSED and attach the reason."""
+    """Mark reviewed findings as SUPPRESSED and keep their original status."""
     for finding in findings:
         reason = SUPPRESSIONS.get((finding["check_id"], finding["resource"]))
-        if reason and finding["status"] == "FAIL":
+        if reason and finding["status"] in SUPPRESSIBLE_STATUSES:
+            finding["original_status"] = finding["status"]
             finding["status"] = "SUPPRESSED"
             finding["suppression_reason"] = reason
     return findings
