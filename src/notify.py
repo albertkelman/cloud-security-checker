@@ -19,12 +19,18 @@ def format_finding(finding):
             f"{finding['resource']} ({finding['region']}): {finding['message']}")
 
 
-def build_subject(summary, history=None):
-    """Short subject line. SNS email subjects must be under 100 characters."""
-    status = "ACTION NEEDED" if summary["fail"] or summary["error"] else "OK"
+def build_subject(summary, history=None, history_error=None):
+    """Short subject line. SNS email subjects must be under 100 characters.
+
+    The subject never says OK when the scanner itself had a problem.
+    """
+    needs_action = summary["fail"] or summary["error"] or history_error
+    status = "ACTION NEEDED" if needs_action else "OK"
     subject = (f"[cloud-security-checker] {status}: "
                f"{summary['fail']} FAIL, {summary['error']} ERROR")
-    if history and history["new"]:
+    if history_error:
+        subject += ", HISTORY ERROR"
+    elif history and history["new"]:
         subject += f", {len(history['new'])} NEW"
     return subject
 
@@ -41,9 +47,17 @@ def build_changes_section(history, history_error):
         return lines
 
     lines.append(f"New ({len(history['new'])}):")
-    lines.extend(format_finding(f) for f in history["new"]) if history["new"] else lines.append("- none")
+    if history["new"]:
+        lines.extend(format_finding(f) for f in history["new"])
+    else:
+        lines.append("- none")
+
     lines.append(f"Resolved ({len(history['resolved'])}):")
-    lines.extend(format_finding(f) for f in history["resolved"]) if history["resolved"] else lines.append("- none")
+    if history["resolved"]:
+        lines.extend(format_finding(f) for f in history["resolved"])
+    else:
+        lines.append("- none")
+
     lines.append(f"Still open from earlier scans: {len(history['still_open'])}")
     return lines
 
@@ -97,7 +111,7 @@ def send_report(session, findings, summary, history=None, history_error=None):
     sns = session.client("sns")
     response = sns.publish(
         TopicArn=ALERT_TOPIC_ARN,
-        Subject=build_subject(summary, history),
+        Subject=build_subject(summary, history, history_error),
         Message=build_message(findings, summary, history, history_error),
     )
     print(f"Report published to SNS, message ID {response['MessageId']}")
