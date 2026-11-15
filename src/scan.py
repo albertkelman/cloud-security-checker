@@ -5,6 +5,7 @@ from pathlib import Path
 
 import boto3
 
+from check_cloudtrail import run_cloudtrail_checks
 from check_ec2 import run_sg_checks
 from check_iam import run_iam_checks
 from check_s3 import run_s3_checks
@@ -22,6 +23,7 @@ def main():
     findings.extend(run_s3_checks(session, account_id))
     findings.extend(run_iam_checks(session))
     findings.extend(run_sg_checks(session))
+    findings.extend(run_cloudtrail_checks(session))
 
     apply_suppressions(findings)
     findings.sort(key=lambda f: SEVERITY_ORDER.get(f["severity"], 99))
