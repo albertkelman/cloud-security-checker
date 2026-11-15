@@ -96,3 +96,21 @@
 - The Lambda resource-based policy stays empty: Scheduler invokes through its role.
 - Tested with a one-time schedule (cloud-security-checker-test) set to delete itself
   after running. Report email arrived at the scheduled time without a manual invoke.
+
+  ## Session 6 - Finding history and alarms
+- Created DynamoDB table scanner-findings (on-demand, partition key finding_key =
+  check_id#resource#region)
+- Added dynamodb:Scan, PutItem, UpdateItem on that table only. No DeleteItem,
+  so the scanner cannot erase its own history.
+- Added store.py: compares each scan with open findings in the table and returns
+  new, still open, and resolved findings. Resolved rows are kept (is_open = false,
+  resolved_at). Suppressed findings are not tracked.
+- Used ExpressionAttributeNames because "status" is a DynamoDB reserved word
+- Email now starts with "Changes since the last scan" and the subject adds "N NEW"
+- If the history update fails, the report is still emailed, then the run fails
+  so the error alarm fires
+- Lambda environment variables: ALERT_TOPIC_ARN and FINDINGS_TABLE.
+  Note: --environment replaces all variables, so both must be passed together.
+- Full cycle test with a test security group (SSH open to 0.0.0.0/0, no instances):
+  scan 1: 1 NEW, scan 2: still open (no NEW), deleted the group, scan 3: 1 resolved.
+  DynamoDB row: is_open false, first_seen and resolved_at recorded.
