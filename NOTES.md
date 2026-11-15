@@ -114,3 +114,17 @@
 - Full cycle test with a test security group (SSH open to 0.0.0.0/0, no instances):
   scan 1: 1 NEW, scan 2: still open (no NEW), deleted the group, scan 3: 1 resolved.
   DynamoDB row: is_open false, first_seen and resolved_at recorded.
+  - Created CloudWatch alarm cloud-security-checker-errors: AWS/Lambda Errors,
+  Sum over 5 minutes >= 1, missing data = not breaching. ALARM and OK actions
+  send to scanner-alerts.
+- Tested by pointing FINDINGS_TABLE to a non-existent table. DynamoDB returned
+  AccessDeniedException before checking if the table exists, because the policy only
+  allows scanner-findings. The report email still arrived (with "History could not
+  be updated"), the run failed with RuntimeError, and the alarm fired.
+- Restored FINDINGS_TABLE=scanner-findings and confirmed a clean run.
+- A missing daily email is the signal that the scanner did not run at all
+  (an Invocations alarm is a possible improvement).
+  - Bug found during the alarm test: the report sent when the history failed still had
+  the subject "OK: 0 FAIL, 0 ERROR". Fixed build_subject to say
+  "ACTION NEEDED ..., HISTORY ERROR" when the history update fails.
+  
