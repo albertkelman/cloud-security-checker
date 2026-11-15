@@ -127,4 +127,19 @@
   - Bug found during the alarm test: the report sent when the history failed still had
   the subject "OK: 0 FAIL, 0 ERROR". Fixed build_subject to say
   "ACTION NEEDED ..., HISTORY ERROR" when the history update fails.
-  
+
+  ## Session 7 - Demo
+- Created 5 deliberate misconfigurations: account BPA off, a test bucket with BPA off
+  and a public bucket policy (empty bucket), and a security group with SSH (22) and
+  RDP (3389) open to 0.0.0.0/0 (no instances attached)
+- Bug found during the demo: the email said 5 FAIL but only 4 NEW. Both security group
+  rules produced findings with the same history key (check_id#resource#region), so one
+  overwrote the other in store.py.
+- Fix: check_ec2.py now creates one finding per security group, listing every exposed
+  service. Rule: one finding per check per resource.
+- After the fix: 4 FAIL. Removed every misconfiguration, re-enabled account BPA,
+  re-ran: OK, 4 resolved. DynamoDB shows first_seen and resolved_at for each finding.
+- IAM_USER_NO_MFA was not demonstrated: it would require creating a real console
+  password, and IAM users for people are discouraged on this account type.
+- Screenshots saved outside the repo (terminal, findings email, resolved email,
+  DynamoDB history)

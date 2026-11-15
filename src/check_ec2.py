@@ -28,7 +28,7 @@ def open_sources(permission):
     """Return the internet-wide CIDRs (IPv4 or IPv6) in one inbound rule."""
     ipv4 = {r["CidrIp"] for r in permission.get("IpRanges", [])}
     ipv6 = {r["CidrIpv6"] for r in permission.get("Ipv6Ranges", [])}
-    return sorted((ipv4 | ipv6) & OPEN_CIDRS)
+    return (ipv4 | ipv6) & OPEN_CIDRS
 
 
 def exposed_services(permission):
@@ -49,7 +49,11 @@ def exposed_services(permission):
 
 
 def check_region(session, region):
-    """Check every security group in one region. Returns (findings, group_count)."""
+    """Check every security group in one region. Returns (findings, group_count).
+
+    One finding per security group, listing every exposed service, so that each
+    finding has a unique history key (check_id + resource + region).
+    """
     ec2 = session.client("ec2", region_name=region)
     findings = []
     group_count = 0
@@ -59,15 +63,23 @@ def check_region(session, region):
             group_count += 1
             resource = f"{group['GroupId']} ({group.get('GroupName', '')})"
 
+            # Collect every exposed service in this group, across all of its rules
+            exposures = {}
             for permission in group.get("IpPermissions", []):
                 sources = open_sources(permission)
                 if not sources:
                     continue
-                services = exposed_services(permission)
-                if services:
-                    findings.append(make_finding(
-                        "SG_OPEN_TO_INTERNET", resource, region, "HIGH", "FAIL",
-                        f"Inbound {', '.join(services)} open to {', '.join(sources)}"))
+                for service in exposed_services(permission):
+                    exposures.setdefault(service, set()).update(sources)
+
+            if exposures:
+                details = "; ".join(
+                    f"{service} open to {', '.join(sorted(sources))}"
+                    for service, sources in sorted(exposures.items())
+                )
+                findings.append(make_finding(
+                    "SG_OPEN_TO_INTERNET", resource, region, "HIGH", "FAIL",
+                    f"Inbound {details}"))
 
     return findings, group_count
 
