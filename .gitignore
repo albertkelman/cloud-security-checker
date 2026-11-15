@@ -23,3 +23,7 @@ output/
 Thumbs.db
 .DS_Store
 .vscode/
+
+# Build output
+build/
+*.zip

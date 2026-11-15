@@ -55,3 +55,21 @@
 - Added CLOUDTRAIL_LOG_VALIDATION_OFF check. It detected that quick create left log
   file validation disabled (LOW). Enabled it and re-ran: 0 FAIL, 0 ERROR,
   2 SUPPRESSED.
+
+  ## Session 4 - Running the scanner in AWS Lambda
+- Split the code: scan.py (shared logic + local entry point) and handler.py
+  (Lambda entry point). common.py detects Lambda through AWS_LAMBDA_FUNCTION_NAME
+  and uses the function role instead of the csc-dev profile.
+- Created log group /aws/lambda/cloud-security-checker with 14-day retention
+  (Lambda would otherwise create one that keeps logs forever)
+- Created cloud-security-checker-scan-policy: only the read actions the code calls,
+  plus CreateLogStream/PutLogEvents on its own log group. No write or data access.
+  Resource "*" is needed for account-level actions such as s3:ListAllMyBuckets.
+- Created cloud-security-checker-lambda-role (trusted by lambda.amazonaws.com) with
+  only that policy. Did not attach AWSLambdaBasicExecutionRole.
+- Created Lambda function cloud-security-checker: Python, arm64, 256 MB,
+  120 s timeout, handler handler.lambda_handler, no function URL, no VPC.
+  Code uploaded as build/function.zip (boto3 is included in the runtime).
+- First run in Lambda: 0 FAIL, 0 ERROR, 2 SUPPRESSED. No AccessDenied errors,
+  so the custom policy covers every API call.
+  Duration ~21 s, max memory 124 MB.
