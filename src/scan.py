@@ -1,4 +1,4 @@
-"""Run every check and print a summary. Read-only."""
+"""Core scan logic, shared by the local command line and the Lambda handler. Read-only."""
 
 import json
 from pathlib import Path
@@ -14,11 +14,15 @@ from common import HOME_REGION, PROFILE, apply_suppressions
 SEVERITY_ORDER = {"HIGH": 0, "MEDIUM": 1, "LOW": 2, "UNKNOWN": 3}
 
 
-def main():
-    session = boto3.Session(profile_name=PROFILE, region_name=HOME_REGION)
+def create_session():
+    """Local: uses the csc-dev profile. Lambda: uses the function's IAM role."""
+    return boto3.Session(profile_name=PROFILE, region_name=HOME_REGION)
+
+
+def run_all_checks(session):
+    """Run every check, apply suppressions, and return findings sorted by severity."""
     account_id = session.client("sts").get_caller_identity()["Account"]
 
-    print("Running checks:")
     findings = []
     findings.extend(run_s3_checks(session, account_id))
     findings.extend(run_iam_checks(session))
@@ -27,16 +31,36 @@ def main():
 
     apply_suppressions(findings)
     findings.sort(key=lambda f: SEVERITY_ORDER.get(f["severity"], 99))
-    failed = sum(1 for f in findings if f["status"] == "FAIL")
-    errors = sum(1 for f in findings if f["status"] == "ERROR")
-    suppressed = sum(1 for f in findings if f["status"] == "SUPPRESSED")
+    return findings
 
-    print(f"\nFindings: {failed} FAIL, {errors} ERROR, {suppressed} SUPPRESSED")
+
+def summarize(findings):
+    """Count findings by status."""
+    return {
+        "fail": sum(1 for f in findings if f["status"] == "FAIL"),
+        "error": sum(1 for f in findings if f["status"] == "ERROR"),
+        "suppressed": sum(1 for f in findings if f["status"] == "SUPPRESSED"),
+    }
+
+
+def print_report(findings, summary):
+    """Print a human-readable report."""
+    print(f"\nFindings: {summary['fail']} FAIL, {summary['error']} ERROR, "
+          f"{summary['suppressed']} SUPPRESSED")
     for f in findings:
         print(f"  [{f['severity']}] {f['status']} {f['check_id']} "
               f"{f['resource']} ({f['region']}): {f['message']}")
         if f["status"] == "SUPPRESSED":
             print(f"      Reason: {f['suppression_reason']}")
+
+
+def main():
+    """Local entry point: run the scan and save the results to output/."""
+    session = create_session()
+    print("Running checks:")
+    findings = run_all_checks(session)
+    summary = summarize(findings)
+    print_report(findings, summary)
 
     output_dir = Path("output")
     output_dir.mkdir(exist_ok=True)

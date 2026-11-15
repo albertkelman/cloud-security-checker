@@ -3,7 +3,10 @@
 import os
 from datetime import datetime, timezone
 
-PROFILE = os.environ.get("AWS_PROFILE", "csc-dev")
+# Locally we use the csc-dev profile.
+# In Lambda, credentials come from the function's IAM role, so no profile is used.
+RUNNING_IN_LAMBDA = "AWS_LAMBDA_FUNCTION_NAME" in os.environ
+PROFILE = None if RUNNING_IN_LAMBDA else os.environ.get("AWS_PROFILE", "csc-dev")
 HOME_REGION = "ap-southeast-2"
 
 # Findings reviewed by a human and accepted, with a written reason.
