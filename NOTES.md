@@ -143,3 +143,27 @@
   password, and IAM users for people are discouraged on this account type.
 - Screenshots saved outside the repo (terminal, findings email, resolved email,
   DynamoDB history)
+
+  ## Session 8 - Terraform
+- Installed Terraform 1.17 with winget
+- Created the state bucket by hand (versioning on, public access blocked by the
+  account-level setting). Backend uses S3 native locking (use_lockfile), no DynamoDB
+  lock table.
+- Terraform reads temporary credentials exported from the csc-dev profile
+  (aws configure export-credentials). They expire quickly; re-run aws login and the
+  export when Terraform reports ExpiredToken.
+- Wrote logging.tf, notifications.tf, storage.tf, iam.tf, lambda.tf, schedule.tf,
+  and alarms.tf. ARNs are built from data sources, so the code has no account ID.
+  The alert email is in terraform.tfvars, which is not committed.
+- Collected exact details first (runtime, IAM paths, policy descriptions) because some
+  attributes, such as an IAM policy description or a role path, force replacement.
+- Imported the 11 existing resources with import blocks instead of recreating them:
+  no downtime and no new email confirmation. Plan: 11 to import, 1 to add,
+  9 to change (mostly tags), 0 to destroy.
+- Removed imports.tf after apply (one-time use, contained the account ID).
+  terraform plan: "No changes".
+- Replaced the console-created scheduler managed policy with a Terraform inline policy
+  (invoke-scanner-lambda), then detached and deleted the old policy.
+- Tested a one-time schedule with the new policy: report email arrived.
+
+
